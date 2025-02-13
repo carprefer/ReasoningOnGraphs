@@ -1,3 +1,7 @@
+output/*
+data/*
+reasoning-on-graphs/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
