@@ -10,6 +10,7 @@ class Llm():
             'text-generation',
             model=args.modelName,
             torch_dtype=torch.bfloat16,
+            use_fast=False,
             device=device,
         )
         self.generator.tokenizer.pad_token_id = self.generator.model.config.eos_token_id

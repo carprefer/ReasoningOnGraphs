@@ -16,9 +16,9 @@
 1. ~~환경 설정~~
 2. ~~dataset 모듈 구현~~ 
 3. ~~LLM만 사용하여 평가 진행 및 비교~~
-4. planning 모듈 구현 및 테스트(w/ pre_trained model)
-5. retrieve 모듈 구현 및 테스트 
-6. reasoning 모듈 구현 및 테스트(w/ pre_trained model)
+4. ~~planning 모듈 구현 및 테스트(w/ pre_trained model)~~
+5. ~~retrieve 모듈 구현 및 테스트~~ 
+6. ~~reasoning 모듈 구현 및 테스트(w/ pre_trained model)~~
 7. planning 학습
 8. reasoning 학습
 9. 전체 평가

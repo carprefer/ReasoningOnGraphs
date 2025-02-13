@@ -1,6 +1,7 @@
 output/*
 data/*
 reasoning-on-graphs/
+implementation/*.txt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

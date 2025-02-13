@@ -16,17 +16,55 @@ from dataset.webQspDataset import WebQspDataset
 from evaluate import eval_result
 from common.utils import *
 from common.config import argparser
-from common.prompter import generatePrompts
+from common.prompter import Prompter
 
 MODEL = {
     'llm': Llm,
     'roG': RoG,
+    'myRoG': RoG,
 }
 
 DATASET = {
     'cwq': CwqDataset,
     'webQsp': WebQspDataset,
 }
+
+def makePlans(accelerator, model, prompter, testBatchs, planPath):
+    accelerator.print("Making plans ...")
+    results = []
+    for inputs in tqdm(testBatchs):
+        with torch.no_grad():
+            outputs = model.planning(prompter.generatePrompts(inputs, 'plan'))
+        for input, output in zip(inputs, outputs):
+            graph = build_graph(input["graph"])
+            paths = get_truth_paths(input["q_entity"], input["a_entity"], graph)
+            ground_paths = set()
+            for path in paths:
+                ground_paths.add(tuple([p[1] for p in path]))  # extract relation path
+            result = {
+                'id': input['id'],
+                'question': input['question'],
+                'prediction': parse_prediction(output['paths']),
+                'ground_paths': list(ground_paths),
+                'raw_output': output,
+            }
+            results.append(result)
+
+    gatheredResults = gather_object(results)
+    if accelerator.is_main_process:
+        with open(planPath, 'w') as f:
+            for result in flatten(gatheredResults):
+                f.write(json.dumps(result) + '\n')
+
+# update testBatchs
+def retrieveReasoningPaths(accelerator, model, testBatchs, planPath):
+    plansets = splitDataset(loadJsonl(planPath), 0, accelerator.num_processes)
+    planBatchs = makeBatchs(plansets[accelerator.process_index], len(testBatchs[0]))
+    for datas, plans in tqdm(zip(testBatchs, planBatchs)):
+        for data, plan in zip(datas, plans):
+            data['reasoningPaths'] = model.retrieving(data['graph'], plan['prediction'], data['q_entity'])
+    
+
 
 def main(args):
     accelerator = Accelerator()
@@ -35,60 +73,48 @@ def main(args):
 
     accelerator.print("Loading dataset ... ")
     dataset = DATASET[args.dataset]()
+
     accelerator.print("Making testset ...")
     testsets = splitDataset(dataset.dataset['test'], args.testNum, accelerator.num_processes)
 
-    accelerator.print(f"Load model on {accelerator.process_index}... ")
+    accelerator.print("Loading model ... ")
     model = MODEL[args.model](args, accelerator.device)
+    prompter = Prompter(model)
 
     testset = testsets[accelerator.process_index]
 
     testBatchs = makeBatchs(testset, args.testBatchSize)
 
-    accelerator.print(f"Inference on {accelerator.process_index}... ")
     if args.model == 'roG':
-        model.plan()
+        if not os.path.exists(planPath):
+            makePlans(accelerator, model, prompter, testBatchs, planPath)
+        accelerator.wait_for_everyone()
+        accelerator.print("Retrieving reasoning paths ...")
+        retrieveReasoningPaths(accelerator, model, testBatchs, planPath)
+
+    accelerator.print("Inferencing ... ")
+
     results = []
     for inputs in tqdm(testBatchs):
         with torch.no_grad():
-            if args.model == 'roG':
-                outputs = model.inference(generatePrompts(inputs, 'rogPlan'))
-            else:
-                outputs = model.inference(generatePrompts(inputs, 'llm'))
+            outputs = model.inference(prompter.generatePrompts(inputs, args.model))
         for input, output in zip(inputs, outputs):
-            if args.model == 'roG':
-                graph = build_graph(input["graph"])
-                paths = get_truth_paths(input["q_entity"], input["a_entity"], graph)
-                ground_paths = set()
-                for path in paths:
-                    ground_paths.add(tuple([p[1] for p in path]))  # extract relation path
-                result = {
-                    'id': input['id'],
-                    'question': input['question'],
-                    'prediction': parse_prediction(output['paths']),
-                    'ground_paths': list(ground_paths),
-                    'raw_output': output,
-                }
-            else:
-                result = {
-                    'id': input['id'],
-                    'question': input['question'],
-                    'prediction': output,
-                    'ground_truth': input['answer'],
-                }
+            result = {
+                'id': input['id'],
+                'question': input['question'],
+                'prediction': output,
+                'ground_truth': input['answer'],
+            }
             results.append(result)
 
     gatheredResults = gather_object(results)
     
     if accelerator.is_main_process:
-        if args.model == 'roG':
-            outputPath = planPath
         with open(outputPath, 'w') as f:
             for result in flatten(gatheredResults):
                 f.write(json.dumps(result) + '\n')
-        if args.mode == 'llm':
-            print("Evaluating ...")
-            eval_result(outputPath)
+        print("Evaluating ...")
+        eval_result(outputPath)
     
 
 

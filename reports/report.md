@@ -38,7 +38,7 @@ python train.py --dataset webQsp --model graphLlm --useGR
 | dataset | WebQsp | WebQsp | CWQ | CWQ |
 |---------|--------|--------|-----|-----|
 | model \ metric| Hit@1 | F1 | Hit@1 | F1 |
-| llama-2-7b-chat-hf | 53.62 | 24.49 | 27.64 | 13.20 |
+| llama-2-7b-chat-hf | 53.87 | 24.59 | 28.07 | 13.42 |
 | prompt tuning | 0.5144 | 0.4 | 27.0 | |
 | gRetriever | 0.9350 | 0.4965 | 61.87 |
 

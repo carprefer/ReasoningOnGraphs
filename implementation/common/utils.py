@@ -1,8 +1,17 @@
 import re
+import json
 import random
 import numpy as np
 import networkx as nx
+from collections import deque
 from tqdm import tqdm
+
+def loadJsonl(file_path):
+    datas = []
+    with open(file_path, 'r') as f:
+        for line in f:
+            datas.append(json.loads(line))
+    return datas
 
 def flatten(origin: list):
     flatted = []
@@ -58,6 +67,40 @@ def get_truth_paths(q_entity: list, a_entity: list, graph: nx.Graph) -> list:
             tmp.append((u, graph[u][v]['relation'], v))
         result_paths.append(tmp)
     return result_paths
+
+def bfs_with_rule(graph, start_node, target_rule, max_p = 10):
+    result_paths = []
+    queue = deque([(start_node, [])])  
+    while queue:
+        current_node, current_path = queue.popleft()
+
+        if len(current_path) == len(target_rule):
+            result_paths.append(current_path)
+            # if len(result_paths) >= max_p:
+            #     break
+            
+        if len(current_path) < len(target_rule):
+            if current_node not in graph:
+                continue
+            for neighbor in graph.neighbors(current_node):
+                rel = graph[current_node][neighbor]['relation']
+                if rel != target_rule[len(current_path)] or len(current_path) > len(target_rule):
+                    continue
+                queue.append((neighbor, current_path + [(current_node, rel,neighbor)]))
+    
+    return result_paths
+
+def path_to_string(path: list) -> str:
+    result = ""
+    for i, p in enumerate(path):
+        if i == 0:
+            h, r, t = p
+            result += f"{h} -> {r} -> {t}"
+        else:
+            _, r, t = p
+            result += f" -> {r} -> {t}"
+            
+    return result.strip()
 
 def parse_prediction(prediction):
     """
