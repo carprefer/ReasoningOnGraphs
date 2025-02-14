@@ -1,7 +1,6 @@
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
 from peft import AutoPeftModelForCausalLM
-from common.utils import *
 
 class RoG():
     def __init__(self, args, device):
@@ -20,72 +19,44 @@ class RoG():
             'text-generation',
             model=self.model,
             tokenizer=self.tokenizer,
-            torch_dtype=torch.bfloat16,
             device=device,
         )
 
         self.model.eval()
 
         #self.tokenizer.pad_token_id = self.model.config.eos_token_id
-
-    def isPromptFit(self, prompt):
-        tokens = self.tokenizer.encode(prompt, add_special_tokens=False)
-        return len(tokens) <= self.maxTokenLength
     
     def planning(self, prompts: list[str]):
-        batchSize = len(prompts)
         inputs = self.tokenizer(prompts, return_tensors='pt', padding=True, add_special_tokens=False)
         inputIds = inputs['input_ids'].to(self.model.device)
+        attentionMask = inputs['attention_mask'].to(self.model.device)
         outputs = self.model.generate(
             input_ids=inputIds,
-            attention_mask=inputs['attention_mask'].to(self.model.device),
+            attention_mask=attentionMask,
             max_new_tokens=self.maxPlanTokens, 
             num_beams=self.numBeam,
             num_return_sequences=self.numBeam,
             output_scores=True,
             return_dict_in_generate=True,
-            early_stopping=False,
-            return_legacy_cache=True,
         )
+        # remove question part & decode
         paths = self.tokenizer.batch_decode(outputs.sequences[:,inputIds.shape[-1]:], skip_special_tokens=True)
         paths = [p.strip() for p in paths]
         scores = outputs.sequences_scores.tolist()
         normScores = torch.softmax(outputs.sequences_scores, dim=0).tolist()
         results = []
-        for b in range(batchSize):
+        for b in range(len(prompts)):
             s = b * self.numBeam
             e = s + self.numBeam
             results.append({'paths': paths[s:e], 'scores': scores[s:e], 'normScores': normScores[s:e]})
         
         return results
-    
-    def retrieving(self, graph, plans, qEntities):
-        reasoningPaths = []
-        for qEntity in qEntities:
-            for plan in plans:
-                reasoningPath = bfs_with_rule(graph, qEntity, plan)
-                reasoningPaths.extend(reasoningPath)
-        
-        return reasoningPaths
 
 
     def inference(self, prompts: list[str]):
-        outputs = self.generator(prompts, return_full_text=False, max_new_tokens=self.maxNewTokens, batch_size=len(prompts), padding=True)
+        outputs = self.generator(prompts, return_full_text=False, max_new_tokens=self.maxNewTokens, batch_size=1, padding=True)
         return [o[0]['generated_text'] for o in outputs]
-    
-    """def inference(self, prompts: list[str]):
-        inputs = self.tokenizer(prompts, return_tensors='pt', padding=True, add_special_tokens=False)
-        inputIds = inputs['input_ids'].to(self.model.device)
-        outputs = self.model.generate(
-            input_ids=inputIds,
-            attention_mask=inputs['attention_mask'].to(self.model.device),
-            max_new_tokens=self.maxNewTokens, 
-        )
-        return self.tokenizer.batch_decode(outputs[:,inputIds.shape[-1]:], skip_special_tokens=True)"""
-    
-        
 
-    
 if __name__ == '__main__':
     {}
 

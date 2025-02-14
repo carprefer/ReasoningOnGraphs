@@ -6,14 +6,11 @@ import networkx as nx
 from collections import deque
 from tqdm import tqdm
 
-def loadJsonl(file_path):
-    datas = []
-    with open(file_path, 'r') as f:
-        for line in f:
-            datas.append(json.loads(line))
-    return datas
+def loadJsonl(filePath: str) -> list:
+    with open(filePath, 'r') as f:
+        return [json.loads(line) for line in f]
 
-def flatten(origin: list):
+def flatten(origin: list) -> list:
     flatted = []
     for o in origin:
         if isinstance(o, list):
@@ -23,109 +20,77 @@ def flatten(origin: list):
     return flatted
 
 
-def makeBatchs(dataList, batchSize):
+def makeBatchs(dataList: list, batchSize: int) -> list:
     return [dataList[i:i+batchSize] for i in range(0, len(dataList), batchSize)]
 
-def splitDataset(dataset, num, workerNum):
+def splitDataset(dataset, num: int, workerNum: int) -> list[list]:
     idxs = range(len(dataset))
     if num != 0:
         idxs = random.sample(idxs, num)
     dataList = [dataset[i] for i in tqdm(idxs)]
     return [a.tolist() for a in np.array_split(dataList, workerNum)]
 
-def build_graph(graph: list) -> nx.Graph:
-    G = nx.Graph()
-    for triplet in graph:
-        h, r, t = triplet
-        G.add_edge(h, t, relation=r.strip())
-    return G
+def triples2graph(triples: list) -> nx.Graph:
+    graph = nx.Graph()
+    for src, edge, dst in triples:
+        graph.add_edge(src.strip(), dst.strip(), relation=edge.strip())
+    return graph
 
-def get_truth_paths(q_entity: list, a_entity: list, graph: nx.Graph) -> list:
-    '''
-    Get shortest paths connecting question and answer entities.
-    '''
-    # Select paths
+def path2string(path: list) -> str:
+    if len(path) == 0:
+        return ""
+    
+    return path[0][0] + "".join([f" -> {edge} -> {dst}" for src, edge, dst in path])
+
+def getRelationPaths(qEntities: list, aEntities: list, triples: list) -> list:
+    graph = triples2graph(triples)
+
     paths = []
-    for h in q_entity:
-        if h not in graph:
+    for src in qEntities:
+        if src not in graph:
             continue
-        for t in a_entity:
-            if t not in graph:
+        for dst in aEntities:
+            if dst not in graph:
                 continue
             try:
-                for p in nx.all_shortest_paths(graph, h, t):
-                    paths.append(p)
+                paths += list(nx.all_shortest_paths(graph, src, dst))
             except:
                 pass
-    # Add relation to paths
-    result_paths = []
-    for p in paths:
-        tmp = []
-        for i in range(len(p)-1):
-            u = p[i]
-            v = p[i+1]
-            tmp.append((u, graph[u][v]['relation'], v))
-        result_paths.append(tmp)
-    return result_paths
+    # extract relation only & make them unique
+    return list(set([tuple([graph[p[i]][p[i+1]]['relation'] for i in range(len(p)-1)]) for p in paths]))
 
-def bfs_with_rule(graph, start_node, target_rule, max_p = 10):
-    result_paths = []
-    queue = deque([(start_node, [])])  
-    while queue:
-        current_node, current_path = queue.popleft()
-
-        if len(current_path) == len(target_rule):
-            result_paths.append(current_path)
-            # if len(result_paths) >= max_p:
-            #     break
-            
-        if len(current_path) < len(target_rule):
-            if current_node not in graph:
-                continue
-            for neighbor in graph.neighbors(current_node):
-                rel = graph[current_node][neighbor]['relation']
-                if rel != target_rule[len(current_path)] or len(current_path) > len(target_rule):
-                    continue
-                queue.append((neighbor, current_path + [(current_node, rel,neighbor)]))
-    
-    return result_paths
-
-def path_to_string(path: list) -> str:
-    result = ""
-    for i, p in enumerate(path):
-        if i == 0:
-            h, r, t = p
-            result += f"{h} -> {r} -> {t}"
-        else:
-            _, r, t = p
-            result += f" -> {r} -> {t}"
-            
-    return result.strip()
-
-def parse_prediction(prediction):
-    """
-    Parse a list of predictions to a list of rules
-
-    Args:
-        prediction (_type_): _description_
-
-    Returns:
-        _type_: _description_
-    """
-    results = []
-    for p in prediction:
+def parseRelationPaths(pred: list[str]) -> list[list]:
+    relationPaths = []
+    for p in pred:
         path = re.search(r"<PATH>(.*)<\/PATH>", p)
         if path is None:
             continue
-        path = path.group(1)
-        path = path.split("<SEP>")
+        path = path.group(1).split("<SEP>")
         if len(path) == 0:
             continue
-        rules = []
-        for rel in path:
-            rel = rel.strip()
-            if rel == "":
+        path = list(filter(lambda x: x != "", [r.strip() for r in path]))
+        relationPaths.append(path)
+    return relationPaths
+
+def encodeRelationPaths(relationPaths: list) -> str:
+    return ['<PATH>' + '<SEP>'.join(rp) + '</PATH>' for rp in relationPaths]
+
+def retrieveReasoningPathsFromRelationPath(triples: list, startNode: str, relationPath: list) -> list[list]:
+    graph = triples2graph(triples)
+    reasoningPaths = []
+    queue = deque([(startNode, [])])  
+    while queue:
+        curNode, curPath = queue.popleft()
+
+        if len(curPath) == len(relationPath):
+            reasoningPaths.append(curPath)
+
+        elif len(curPath) < len(relationPath):
+            if curNode not in graph:
                 continue
-            rules.append(rel)
-        results.append(rules)
-    return results
+            for neighbor in graph.neighbors(curNode):
+                rel = graph[curNode][neighbor]['relation']
+                if rel == relationPath[len(curPath)]:
+                    queue.append((neighbor, curPath + [(curNode, rel, neighbor)]))
+    
+    return reasoningPaths

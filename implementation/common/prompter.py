@@ -2,14 +2,20 @@ import random
 from common.utils import *
 
 class Prompter():
-    def __init__(self, model):
-        self.model = model
+    def __init__(self, tokenizer, maxTokenLength):
+        self.tokenizer = tokenizer
+        self.maxTokenLength = maxTokenLength
         self.generatePrompt = {
             'llm': self.llmPrompt,
             'plan': self.rogPlanningPrompt,
             'roG': self.rogReasoningPrompt,
             'originalRoG': self.rogReasoningPrompt,
         }
+
+    
+    def isPromptFit(self, prompt):
+        tokens = self.tokenizer.encode(prompt, add_special_tokens=False)
+        return len(tokens) <= self.maxTokenLength
 
     def llmPrompt(self, data: dict):
         prompt = """[INST] <<SYS>>\n<</SYS>>\n{instruction}\n\nQuestion:\n{question} [/INST]"""
@@ -33,13 +39,14 @@ class Prompter():
         question = data['question']
         if not question.endswith('?'):
             question += '?'
-        paths = [path_to_string(p) for p in data['reasoningPaths']]
+
+        paths = [path2string(p) for p in data['reasoningPaths']]
         random.shuffle(paths)
         newPaths = []
         for path in paths:
             tmpContext = '\n'.join(newPaths + [path])
             tmpPrompt = prompt.format(instruction=instruction, context=tmpContext, question=question)
-            if not self.model.isPromptFit(tmpPrompt):
+            if not self.isPromptFit(tmpPrompt):
                 break
             newPaths.append(path)
 

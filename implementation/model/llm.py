@@ -13,7 +13,8 @@ class Llm():
             use_fast=False,
             device=device,
         )
-        self.generator.tokenizer.pad_token_id = self.generator.model.config.eos_token_id
+        self.tokenizer = self.generator.tokenizer
+        self.tokenizer.pad_token_id = self.generator.model.config.eos_token_id
     
     def inference(self, prompts: list[str]):
         outputs = self.generator(prompts, return_full_text=False, max_new_tokens=self.maxNewTokens, batch_size=len(prompts), padding=True)

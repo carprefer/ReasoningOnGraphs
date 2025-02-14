@@ -14,21 +14,20 @@
 #### llama-2-7b-chat-hf
 - 추론 속도 향상을 위해 max_new_tokens를 512에서 64로 낮추어 inference를 진행했고, 그렇기에 논문에 비해 약간 낮은 결과를 보인다. 
 ```shell
-python inference.py --dataset explaGraphs
-python inference.py --dataset sceneGraphs
-python inference.py --dataset webQsp
+accelerate launch --num_processes 2 --gpu_ids 6,7 inference.py --dataset webQsp --maxNewTokens 256
+accelerate launch --num_processes 2 --gpu_ids 6,7 inference.py --dataset cwq --maxNewTokens 256
 ```
 
-#### prompt-tuning
+#### pretrained roG
 ```shell
-python train.py --dataset explaGraphs --model ptLlm
-python train.py --dataset sceneGraphs --model ptLlm
-python train.py --dataset webQsp --model ptLlm
+accelerate launch --num_processes 2 --gpu_ids 6,7 inference.py --model roG --dataset webQsp
+accelerate launch --num_processes 2 --gpu_ids 6,7 inference.py --model roG --dataset cwq
 ```
 
-#### g-retriever
+#### roG
 ```shell
-python train.py --dataset explaGraphs --model graphLlm
+python preprocess.py --model roG --dataset webQsp
+python preprocess.py --model roG --dataset cwq
 python train.py --dataset sceneGraphs --model graphLlm --useGR
 python train.py --dataset webQsp --model graphLlm --useGR
 ```
@@ -39,7 +38,7 @@ python train.py --dataset webQsp --model graphLlm --useGR
 |---------|--------|--------|-----|-----|
 | model \ metric| Hit@1 | F1 | Hit@1 | F1 |
 | llama-2-7b-chat-hf | 53.87 | 24.59 | 28.07 | 13.42 |
-| prompt tuning | 0.5144 | 0.4 | 27.0 | |
+| pretrained roG | 86.36 | 69.32 | 61.00 | 53.89 |
 | gRetriever | 0.9350 | 0.4965 | 61.87 |
 
 
