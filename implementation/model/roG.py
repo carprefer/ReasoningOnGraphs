@@ -1,5 +1,5 @@
 import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
 from peft import AutoPeftModelForCausalLM
 from common.utils import *
 
@@ -13,8 +13,18 @@ class RoG():
         self.tokenizer = AutoTokenizer.from_pretrained(args.rogModelName, padding_side='left', use_fast=False)
         if args.model == 'myRoG':
             {}
-        self.model = AutoModelForCausalLM.from_pretrained(args.rogModelName, torch_dtype=torch.float16)
+        self.model = AutoModelForCausalLM.from_pretrained(args.rogModelName, torch_dtype=torch.bfloat16)
         self.model.to(device)
+
+        self.generator = pipeline(
+            'text-generation',
+            model=self.model,
+            tokenizer=self.tokenizer,
+            torch_dtype=torch.bfloat16,
+            device=device,
+        )
+
+        self.model.eval()
 
         #self.tokenizer.pad_token_id = self.model.config.eos_token_id
 
@@ -58,8 +68,12 @@ class RoG():
         
         return reasoningPaths
 
-    
+
     def inference(self, prompts: list[str]):
+        outputs = self.generator(prompts, return_full_text=False, max_new_tokens=self.maxNewTokens, batch_size=len(prompts), padding=True)
+        return [o[0]['generated_text'] for o in outputs]
+    
+    """def inference(self, prompts: list[str]):
         inputs = self.tokenizer(prompts, return_tensors='pt', padding=True, add_special_tokens=False)
         inputIds = inputs['input_ids'].to(self.model.device)
         outputs = self.model.generate(
@@ -67,7 +81,7 @@ class RoG():
             attention_mask=inputs['attention_mask'].to(self.model.device),
             max_new_tokens=self.maxNewTokens, 
         )
-        return self.tokenizer.batch_decode(outputs[:,inputIds.shape[-1]:], skip_special_tokens=True)
+        return self.tokenizer.batch_decode(outputs[:,inputIds.shape[-1]:], skip_special_tokens=True)"""
     
         
 

@@ -8,6 +8,7 @@ class Prompter():
             'llm': self.llmPrompt,
             'plan': self.rogPlanningPrompt,
             'roG': self.rogReasoningPrompt,
+            'originalRoG': self.rogReasoningPrompt,
         }
 
     def llmPrompt(self, data: dict):
@@ -30,12 +31,14 @@ class Prompter():
         prompt = """[INST] <<SYS>>\n<</SYS>>\n{instruction}\n\nReasoning Paths:\n{context}\n\nQuestion:\n{question} [/INST]"""
         instruction = """Based on the reasoning paths, please answer the given question. Please keep the answer as simple as possible and return all the possible answers as a list."""
         question = data['question']
+        if not question.endswith('?'):
+            question += '?'
         paths = [path_to_string(p) for p in data['reasoningPaths']]
         random.shuffle(paths)
         newPaths = []
         for path in paths:
             tmpContext = '\n'.join(newPaths + [path])
-            tmpPrompt = prompt.format(instrunction=instruction, context=tmpContext, question=question)
+            tmpPrompt = prompt.format(instruction=instruction, context=tmpContext, question=question)
             if not self.model.isPromptFit(tmpPrompt):
                 break
             newPaths.append(path)

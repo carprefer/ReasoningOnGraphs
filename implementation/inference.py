@@ -11,6 +11,7 @@ from accelerate.utils import gather_object
 
 from model.llm import Llm
 from model.roG import RoG
+from model.originalRoG import OriginalRoG
 from dataset.cwqDataset import CwqDataset
 from dataset.webQspDataset import WebQspDataset
 from evaluate import eval_result
@@ -22,6 +23,7 @@ MODEL = {
     'llm': Llm,
     'roG': RoG,
     'myRoG': RoG,
+    'originalRoG': OriginalRoG,
 }
 
 DATASET = {
@@ -34,6 +36,7 @@ def makePlans(accelerator, model, prompter, testBatchs, planPath):
     results = []
     for inputs in tqdm(testBatchs):
         with torch.no_grad():
+            torch.cuda.empty_cache()
             outputs = model.planning(prompter.generatePrompts(inputs, 'plan'))
         for input, output in zip(inputs, outputs):
             graph = build_graph(input["graph"])
@@ -62,14 +65,13 @@ def retrieveReasoningPaths(accelerator, model, testBatchs, planPath):
     planBatchs = makeBatchs(plansets[accelerator.process_index], len(testBatchs[0]))
     for datas, plans in tqdm(zip(testBatchs, planBatchs)):
         for data, plan in zip(datas, plans):
-            data['reasoningPaths'] = model.retrieving(data['graph'], plan['prediction'], data['q_entity'])
-    
+            data['reasoningPaths'] = model.retrieving(build_graph(data['graph']), plan['prediction'], data['q_entity'])
 
 
 def main(args):
     accelerator = Accelerator()
     outputPath = f"../output/{args.model}/{args.dataset}/predictions.jsonl"
-    planPath = f"../data/{args.model}/{args.dataset}/plans.jsonl"
+    planPath = f"../data/roG/{args.dataset}/plans.jsonl"
 
     accelerator.print("Loading dataset ... ")
     dataset = DATASET[args.dataset]()
@@ -85,7 +87,7 @@ def main(args):
 
     testBatchs = makeBatchs(testset, args.testBatchSize)
 
-    if args.model == 'roG':
+    if args.model != 'llm':
         if not os.path.exists(planPath):
             makePlans(accelerator, model, prompter, testBatchs, planPath)
         accelerator.wait_for_everyone()
@@ -97,13 +99,16 @@ def main(args):
     results = []
     for inputs in tqdm(testBatchs):
         with torch.no_grad():
-            outputs = model.inference(prompter.generatePrompts(inputs, args.model))
-        for input, output in zip(inputs, outputs):
+            torch.cuda.empty_cache()
+            prompts = prompter.generatePrompts(inputs, args.model)
+            outputs = model.inference(prompts)
+        for input, output, prompt in zip(inputs, outputs, prompts):
             result = {
                 'id': input['id'],
                 'question': input['question'],
                 'prediction': output,
                 'ground_truth': input['answer'],
+                'input': prompt,
             }
             results.append(result)
 
