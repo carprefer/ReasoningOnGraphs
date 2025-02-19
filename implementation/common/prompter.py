@@ -9,7 +9,7 @@ class Prompter():
             'llm': self.llmPrompt,
             'plan': self.rogPlanningPrompt,
             'roG': self.rogReasoningPrompt,
-            'originalRoG': self.rogReasoningPrompt,
+            'myRoG': self.rogReasoningPrompt,
         }
 
     

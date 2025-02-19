@@ -5,6 +5,7 @@ import numpy as np
 import networkx as nx
 from collections import deque
 from tqdm import tqdm
+from datasets import load_dataset, concatenate_datasets, Dataset
 
 def loadJsonl(filePath: str) -> list:
     with open(filePath, 'r') as f:
@@ -94,3 +95,45 @@ def retrieveReasoningPathsFromRelationPath(triples: list, startNode: str, relati
                     queue.append((neighbor, curPath + [(curNode, rel, neighbor)]))
     
     return reasoningPaths
+
+def smart_tokenizer_and_embedding_resize(
+    new_tokens: list[str],
+    special_tokens_dict: dict,
+    tokenizer,
+    model,
+):
+    """Resize tokenizer and embedding.
+
+    Note: This is the unoptimized version that may make your embedding size not be divisible by 64.
+    """
+    num_new_tokens = tokenizer.add_tokens(new_tokens)
+    num_new_special_tokens = tokenizer.add_special_tokens(special_tokens_dict)
+    model.resize_token_embeddings(len(tokenizer))
+    total_new_tokens = num_new_tokens + num_new_special_tokens
+    if total_new_tokens > 0:
+        input_embeddings = model.get_input_embeddings().weight.data
+        output_embeddings = model.get_output_embeddings().weight.data
+
+        input_embeddings_avg = input_embeddings[:-num_new_tokens].mean(dim=0, keepdim=True)
+        output_embeddings_avg = output_embeddings[:-num_new_tokens].mean(dim=0, keepdim=True)
+
+        input_embeddings[-num_new_tokens:] = input_embeddings_avg
+        output_embeddings[-num_new_tokens:] = output_embeddings_avg
+
+def load_multiple_datasets(data_path_list, shuffle=False):
+    '''
+    Load multiple datasets from different paths.
+
+    Args:
+        data_path_list (_type_): _description_
+        shuffle (bool, optional): _description_. Defaults to False.
+
+    Returns:
+        _type_: _description_
+    '''
+    dataset_list = [load_dataset('json', data_files=p, split="train")
+                     for p in data_path_list]
+    dataset = concatenate_datasets(dataset_list)
+    if shuffle:
+        dataset = dataset.shuffle()
+    return dataset

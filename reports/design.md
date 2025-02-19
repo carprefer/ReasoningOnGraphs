@@ -19,9 +19,10 @@
 4. ~~planning 모듈 구현 및 테스트(w/ pre_trained model)~~
 5. ~~retrieve 모듈 구현 및 테스트~~ 
 6. ~~reasoning 모듈 구현 및 테스트(w/ pre_trained model)~~
-7. planning 학습
-8. reasoning 학습
-9. 전체 평가
+7. ~~training 데이터 preprocessing~~
+8. planning 학습
+9. reasoning 학습
+10. 전체 평가
 
 ## Environment Setup
 
@@ -38,11 +39,8 @@ pip install accelerate
 pip install sentencepiece
 pip install protobuf
 pip install peft
-
-pip install pandas
-pip install torch_geometric
-pip install pcst_fast
-
+pip install trl
+pip install wandb
 ```
 
 #### accelerate 설정
@@ -50,36 +48,16 @@ pip install pcst_fast
 python -c "from accelerate.utils import write_basic_config; write_basic_config(mixed_precision='fp16')"
 
 # use accelerator instead of python to execute program
-accelerator launch --num_processes 2 --gpu_ids 6, 7 inference.py
+accelerator launch --num_processes 2 --gpu_ids 6,7 inference.py
 ```
 
 ## LLM 설정
 ```python
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
-self.model = AutoModelForCausalLM.from_pretrained(
-    'meta-llama/Llama-2-7b-chat-hf',
-    device_map='auto',
-    low_cpu_mem_usage=True
-)
-```
+self.tokenizer = AutoTokenizer.from_pretrained('meta-llama/Llama-2-7b-chat-hf', padding_side='left', use_fast=False)
 
-## Dataset 다운로드
-
-#### ExplaGraphs
-- explaGraphs에 대해서는 따로 retrieve 과정이 필요없다.
-
-#### SceneGraphs
-- train_sceneGraphs.json과 questions.csv만 사용한다.
-
-#### WebQSP
-
-- embedding이 매우 크고 생성하는데 오래걸린다. (102GB, 22 시간)
-
-```python
-from datasets import load_dataset
-
-ds = load_dataset("rmanluo/RoG-webqsp")
+self.model = AutoModelForCausalLM.from_pretrained('meta-llama/Llama-2-7b-chat-hf', torch_dtype=torch.bfloat16)
 ```
 
 

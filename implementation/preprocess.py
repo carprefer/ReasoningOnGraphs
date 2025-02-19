@@ -3,6 +3,7 @@ import os
 sys.path.append(os.path.dirname(os.path.realpath(__file__)) + "/..")
 
 import json
+import random
 from tqdm import tqdm
 from transformers import AutoTokenizer
 
@@ -53,7 +54,8 @@ def main(args):
         reasoningPrompts = prompter.generatePrompts(trainset, 'roG')
         for data, reasoningPrompt in tqdm(zip(trainset, reasoningPrompts), total=len(trainset)):
             relationPaths = getRelationPaths(data['q_entity'], data['a_entity'], data['graph'])
-            f.write(json.dumps({'ground_paths': relationPaths, 'text': reasoningPrompt + ' ' + '\n'.join(data['answer']) + '</s>'}) + '\n')
+            answers = random.sample(data['answer'], min(10, len(data['answer'])))
+            f.write(json.dumps({'text': reasoningPrompt + ' ' + '\n'.join(answers) + '</s>'}) + '\n')
 
 
 

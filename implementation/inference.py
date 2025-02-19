@@ -11,6 +11,7 @@ from accelerate.utils import gather_object
 
 from model.llm import Llm
 from model.roG import RoG
+from model.myRoG import MyRoG
 from dataset.cwqDataset import CwqDataset
 from dataset.webQspDataset import WebQspDataset
 from evaluate import eval_result
@@ -21,7 +22,7 @@ from common.prompter import Prompter
 MODEL = {
     'llm': Llm,
     'roG': RoG,
-    'myRoG': RoG,
+    'myRoG': MyRoG,
 }
 
 DATASET = {

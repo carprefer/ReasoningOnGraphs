@@ -2,23 +2,17 @@ import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
 from peft import AutoPeftModelForCausalLM
 
-class RoG():
+class MyRoG():
     def __init__(self, args, device):
         self.maxNewTokens = args.maxNewTokens
         self.maxPlanTokens = args.maxPlanTokens
         self.maxTokenLength = args.maxTokenLength
         self.numBeam = args.numBeam
 
-        self.tokenizer = AutoTokenizer.from_pretrained(args.rogModelName, use_fast=False)
-        self.model = AutoModelForCausalLM.from_pretrained(args.rogModelName, torch_dtype=torch.bfloat16)
+        self.tokenizer = AutoTokenizer.from_pretrained(args.rogModelPath, padding_side='left', use_fast=False)
+        self.model = AutoPeftModelForCausalLM.from_pretrained(args.rogModelPath, torch_dtype=torch.bfloat16)
         self.model.to(device)
 
-        self.generator = pipeline(
-            'text-generation',
-            model=self.model,
-            tokenizer=self.tokenizer,
-            device=device,
-        )
 
         self.model.eval()
 
@@ -52,8 +46,16 @@ class RoG():
 
 
     def inference(self, prompts: list[str]):
-        outputs = self.generator(prompts, return_full_text=False, max_new_tokens=self.maxNewTokens, batch_size=1, padding=True)
-        return [o[0]['generated_text'] for o in outputs]
+        inputs = self.tokenizer(prompts, return_tensors='pt', padding=True, add_special_tokens=False)
+        inputIds = inputs['input_ids'].to(self.model.device)
+        attentionMask = inputs['attention_mask'].to(self.model.device)
+        outputs = self.model.generate(
+            input_ids=inputIds,
+            attention_mask=attentionMask,
+            max_new_tokens=self.maxNewTokens, 
+        )
+        # remove question part & decode
+        return self.tokenizer.batch_decode(outputs[:,inputIds.shape[-1]:], skip_special_tokens=True)
 
 if __name__ == '__main__':
     {}

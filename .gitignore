@@ -2,6 +2,7 @@ output/*
 data/*
 reasoning-on-graphs/
 implementation/*.txt
+implementation/wandb/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
